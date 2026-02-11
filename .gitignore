@@ -1,0 +1,5 @@
+
+# Generated TLS certificates (keep .gitkeep)
+certs/*.crt
+certs/*.key
+certs/*.pem

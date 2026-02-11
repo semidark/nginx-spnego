@@ -1,0 +1,8 @@
+# This directory holds TLS certificates for the auth-gateway.
+# Certificates are generated automatically on first container start.
+# 
+# Files:
+#   nginx.crt - Self-signed certificate (import into Windows Trusted Root CAs)
+#   nginx.key - Private key (keep secure, do not share)
+#
+# To regenerate certificates, delete both files and restart the container.

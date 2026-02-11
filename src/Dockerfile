@@ -63,10 +63,35 @@ RUN make
 FROM ubuntu:24.04
 EXPOSE 80/tcp
 EXPOSE 443/tcp
-# TODO: Check if libgssapi-krb5-2 is needed
-RUN apt update && apt install -y nginx libgssapi-krb5-2
+
+
+# Install nginx, Kerberos libraries, and openssl for certificate generation
+RUN apt update && apt install -y --no-install-recommends \
+    nginx \
+    libgssapi-krb5-2 \
+    krb5-user \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy custom-built nginx with SPNEGO module
 COPY --from=build /opt/build/nginx-1.24.0/objs/nginx /usr/sbin/nginx
+
+# TODO: For production don't install Debugging tools
+RUN apt update && apt install -y --no-install-recommends \
+    dnsutils \
+    fish \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add configuration and static files
 ADD default /etc/nginx/sites-enabled/default
 ADD index.html /var/www/html/index.html
-ENTRYPOINT ["/usr/sbin/nginx", "-g daemon off;"]
+
+# Add Kerberos client configuration
+ADD krb5.conf /etc/krb5.conf
+
+# Add entrypoint script for TLS certificate generation and keytab wait
+ADD entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
 
