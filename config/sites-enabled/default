@@ -1,0 +1,72 @@
+##
+# Default server configuration for nginx-spnego auth-gateway
+#
+
+##
+# Redirect HTTP to HTTPS
+#
+server {
+    listen 80 default_server;
+    server_name _;
+
+    # Redirect all HTTP requests to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+##
+# HTTPS server with SPNEGO/Kerberos authentication
+#
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    # TLS Configuration
+    ssl_certificate /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    access_log /dev/stdout;
+    error_log /var/log/nginx/error.log debug;
+
+    location / {
+        ssi on; # Just for testing. Disable for production.
+    
+        root /var/www/html;
+        index index.html;
+
+        # Enable GSSAPI/SPNEGO authentication
+        auth_gss on;
+        # Path to keytab file (must have read permissions for www-data user)
+        auth_gss_keytab /etc/nginx/keytab/nginx.keytab;
+        
+        # Enable Domain in username Variable
+        auth_gss_format_full on;
+        
+        try_files $uri $uri/ =404;
+    }
+
+    ### Example location for nginx reverse proxy
+    # location / {
+    #
+    #     # Enable GSSAPI/SPNEGO authentication
+    #     auth_gss on;
+    #     # Path to keytab file (must have read permissions for www-data user)
+    #     auth_gss_keytab /etc/nginx/keytab/nginx.keytab;
+    #
+    #     # Forward requests to backend server
+    #     proxy_pass http://backend_server;
+    #
+    #     # Preserve client headers and IP
+    #     proxy_set_header Host $host;
+    #     proxy_set_header X-Real-IP $remote_addr;
+    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #     proxy_set_header X-Forwarded-Proto $scheme;
+    #
+    #     # Pass the authenticated username to backend
+    #     proxy_set_header X-Remote-User $remote_user;
+    # }
+}

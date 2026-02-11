@@ -245,10 +245,164 @@ After configuration, navigate to `https://proxy.samdom.example.com/`. You should
 
 Here's a `README.md` description for your SPNEGO-based authentication project to protect internal Kubernetes HTTP applications. It explains the architecture, purpose, and how to use it:
 
+
+---
+
+## Dynamic Configuration
+
+This section explains how to configure the nginx-spnego container for dynamic runtime configuration updates and web application file injection without requiring container rebuilds.
+
+### Runtime Configuration via Mounted Volumes
+
+The nginx-spnego container supports dynamic configuration through Docker volume mounts. This allows you to modify nginx configuration, Kerberos settings, and web application files at runtime without rebuilding the container.
+
+### Configuration File Locations
+
+The following configuration files can be mounted from the host system:
+
+| Host Path | Container Path | Purpose |
+|-----------|----------------|---------|
+| `./nginx-spnego/config/nginx.conf` | `/etc/nginx/nginx.conf` | Main nginx configuration |
+| `./nginx-spnego/config/sites-enabled/` | `/etc/nginx/sites-enabled/` | Site-specific configurations |
+| `./nginx-spnego/config/krb5.conf` | `/etc/krb5.conf` | Kerberos client configuration |
+| `./nginx-spnego/webapps/` | `/var/www/html/` | Web application files |
+
+### docker-compose.yaml Configuration
+
+The docker-compose.yaml has been updated to include volume mounts for dynamic configuration:
+
+```yaml
+services:
+  auth-gateway:
+    build:
+      context: ./nginx-spnego/src
+    volumes:
+      # Shared volume for keytab - DC writes nginx.keytab, auth-gateway reads
+      - keytab_share:/etc/nginx/keytab:ro
+      - ./nginx-spnego/resolv.conf:/etc/resolv.conf:ro
+      # TLS certificates - generated on first start, persisted on host
+      - ./nginx-spnego/certs:/etc/nginx/ssl:rw
+      # Dynamic configuration mounts
+      - ./nginx-spnego/config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx-spnego/config/sites-enabled:/etc/nginx/sites-enabled:ro
+      - ./nginx-spnego/config/krb5.conf:/etc/krb5.conf:ro
+      # Web application files
+      - ./nginx-spnego/webapps:/var/www/html:ro
+    environment:
+      # Hostname for the self-signed certificate (optional override)
+      - SSL_HOSTNAME=${SPNEGO_HOSTNAME:-proxy}.${REALM:-samdom.example.com}
+      # Keytab wait timeout (seconds)
+      - KEYTAB_WAIT_TIMEOUT=120
+      # Path to keytab file (inside container)
+      - KEYTAB_PATH=/etc/nginx/keytab/nginx.keytab
+    hostname: ${SPNEGO_HOSTNAME:-proxy}.${REALM:-samdom.example.com}
+    network_mode: host
+    depends_on:
+      - domain-controller
+```
+
+### Web Application File Injection
+
+Web applications can be injected into the nginx container through the `/var/www/html` directory. Simply place your web application files in the `./nginx-spnego/webapps/` directory on the host system, and they will be served by nginx.
+
+#### Directory Structure
+
+```
+nginx-spnego/
+├── config/
+│   ├── nginx.conf
+│   ├── sites-enabled/
+│   │   └── default
+│   └── krb5.conf
+├── webapps/
+│   ├── index.html
+│   ├── css/
+│   ├── js/
+│   └── images/
+├── certs/
+├── resolv.conf
+└── src/
+```
+
+#### Example: Deploying a Simple Web Application
+
+1. Create the webapps directory:
+```bash
+mkdir -p nginx-spnego/webapps
+```
+
+2. Add your web application files:
+```bash
+echo "<h1>Hello from Dynamic Web App</h1>" > nginx-spnego/webapps/index.html
+cp -r my-app/* nginx-spnego/webapps/
+```
+
+3. Restart the container to pick up changes:
+```bash
+docker compose restart auth-gateway
+```
+
+### Configuration Reload
+
+Nginx can reload its configuration without restarting the entire container. To reload the configuration after making changes:
+
+```bash
+# Send reload signal to nginx
+docker compose exec auth-gateway nginx -s reload
+```
+
+### Best Practices
+
+- Always backup your configuration files before making changes
+- Test configuration changes with `nginx -t` before reloading:
+  ```bash
+  docker compose exec auth-gateway nginx -t
+  ```
+- Use the `:ro` (read-only) flag for configuration volumes to prevent accidental modifications from within the container
+- For production environments, consider using a configuration management tool to manage your nginx configurations
+
+### Troubleshooting
+
+#### Configuration Not Updating
+
+If configuration changes are not being reflected:
+
+1. Verify the volume mounts are correctly configured in docker-compose.yaml
+2. Check that the files exist at the expected host paths
+3. Test the nginx configuration syntax:
+   ```bash
+   docker compose exec auth-gateway nginx -t
+   ```
+4. Reload the configuration:
+   ```bash
+   docker compose exec auth-gateway nginx -s reload
+   ```
+
+#### Permission Issues
+
+If you encounter permission issues with mounted files:
+
+1. Ensure the files are readable by the nginx process (UID 101 in the container)
+2. Set appropriate permissions on the host:
+   ```bash
+   chmod 644 nginx-spnego/config/*.conf
+   chmod -R 644 nginx-spnego/webapps/
+   ```
+
+#### Web Application Not Serving
+
+If your web application files are not being served:
+
+1. Verify the webapps directory is correctly mounted
+2. Check that the files are in the correct location within the container:
+   ```bash
+   docker compose exec auth-gateway ls -la /var/www/html/
+   ```
+3. Verify the nginx server block configuration allows access to the files
+
 ---
 
 ## Usage in Kubernetes
-
 ### 🔒 Use Case
 
 This solution is ideal for internal web applications deployed in a Kubernetes cluster where centralized authentication via **FreeIPA**, **Active Directory**, or another Kerberos-compatible realm is required. It integrates seamlessly with an Ingress controller and supports secure header-based identity propagation.
