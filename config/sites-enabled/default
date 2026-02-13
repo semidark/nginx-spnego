@@ -67,6 +67,7 @@ server {
         auth_gss_keytab /etc/nginx/keytab/nginx.keytab;
         auth_gss_realm $gss_realm;
         auth_gss_format_full on;
+        auth_gss_allow_basic_fallback off;
         
         # Second: LDAP group authorization
         auth_request /_ldap_auth;
@@ -101,6 +102,7 @@ server {
         auth_gss on;
         # Path to keytab file (must have read permissions for www-data user)
         auth_gss_keytab /etc/nginx/keytab/nginx.keytab;
+        auth_gss_allow_basic_fallback off;
         
         # Enable Domain in username Variable
         auth_gss_format_full on;
