@@ -29,9 +29,68 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
 
-    access_log /dev/stdout;
+    # Use custom auth log format
+    access_log /dev/stdout auth_log;
     error_log /var/log/nginx/error.log debug;
 
+    ##
+    # Internal location for LDAP authorization check
+    ##
+    location = /_ldap_auth {
+        internal;
+        
+        proxy_pass http://127.0.0.1:8888/check-header;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        
+        # Pass the Kerberos-authenticated username
+        proxy_set_header X-Ldap-User $remote_user;
+        
+        # Pass original request info for logging
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header X-Original-Method $request_method;
+        
+        # Optional: Override authorization filter per-location
+        # proxy_set_header X-Authorization-Filter "(memberOf=CN=SomeGroup,OU=Groups,DC=...)";
+        
+        # Cache auth responses briefly in NGINX
+        proxy_cache_valid 200 1m;
+        proxy_cache_valid 403 1m;
+    }
+
+    ##
+    # Protected area - requires Kerberos auth + Zulassung group membership
+    ##
+    location /protected/ {
+        # First: Kerberos authentication (already configured)
+        auth_gss on;
+        auth_gss_keytab /etc/nginx/keytab/nginx.keytab;
+        auth_gss_realm $gss_realm;
+        auth_gss_format_full on;
+        
+        # Second: LDAP group authorization
+        auth_request /_ldap_auth;
+        auth_request_set $auth_status $upstream_status;
+        
+        # Custom error pages for auth failures
+        error_page 401 /401.html;
+        error_page 403 /403.html;
+        
+        # Pass authenticated user to backend
+        proxy_set_header X-Remote-User $remote_user;
+        proxy_set_header X-Auth-Status $auth_status;
+        
+        ssi on; # Just for testing. Disable for production.
+
+        # Serve static content or proxy to backend
+        alias /var/www/html/protected/;
+        index index.html;
+        try_files $uri $uri/ =404;
+    }
+
+    ##
+    # Public area - Kerberos auth only, no group restriction
+    ##
     location / {
         ssi on; # Just for testing. Disable for production.
     
@@ -49,8 +108,23 @@ server {
         try_files $uri $uri/ =404;
     }
 
+    ##
+    # Error pages for authentication/authorization failures
+    ##
+    location = /401.html {
+        internal;
+        return 401 'Authentication required. Please authenticate with Kerberos.';
+        add_header Content-Type text/plain;
+    }
+
+    location = /403.html {
+        internal;
+        return 403 'Access denied. You are not a member of the required group.';
+        add_header Content-Type text/plain;
+    }
+
     ### Example location for nginx reverse proxy
-    # location / {
+    # location /backend/ {
     #
     #     # Enable GSSAPI/SPNEGO authentication
     #     auth_gss on;

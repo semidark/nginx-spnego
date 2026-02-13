@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Protected Area</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Protected Area</h1>
+        
+        <div class="success">
+            <strong>✓ Access Granted!</strong>
+            <p>You have been successfully authenticated via Kerberos and authorized via LDAP group membership.</p>
+        </div>
+        
+        <div class="info">
+            <h3>Authentication Details:</h3>
+            <p><strong>Your username:</strong> <!--#echo var="REMOTE_USER" --></p>
+            <p><strong>Request URI:</strong> <!--#echo var="REQUEST_URI" --></p>
+            <p><strong>Server Name:</strong> <!--#echo var="SERVER_NAME" --></p>
+        </div>
+        
+        <h2>What just happened?</h2>
+        <ol>
+            <li><strong>Kerberos Authentication:</strong> Your browser negotiated SPNEGO/Kerberos authentication with the server</li>
+            <li><strong>LDAP Authorization:</strong> The server verified your group membership via the nginx-ldap-auth-service</li>
+            <li><strong>Access Granted:</strong> Both checks passed, so you can access this protected resource</li>
+        </ol>
+        
+        <h2>Technical Details:</h2>
+        <ul>
+            <li>Authentication Method: <code>SPNEGO/Kerberos</code></li>
+            <li>Authorization Method: <code>LDAP Group Membership (Developers)</code></li>
+            <li>NGINX Module: <code>auth_request</code> + <code>auth_gss</code></li>
+            <li>Backend Service: <code>nginx-ldap-auth-service:8888/check-header</code></li>
+        </ul>
+        
+        <p style="margin-top: 30px; color: #666; font-size: 0.9em;">
+            <a href="/">← Back to public area</a>
+        </p>
+    </div>
+</body>
+</html>
