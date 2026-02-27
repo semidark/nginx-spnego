@@ -59,9 +59,64 @@ server {
     }
 
     ##
+    # Internal location: resolves/creates the per-user LiteLLM virtual key
+    ##
+    location = /_litellm_key_broker {
+        internal;
+        proxy_pass http://127.0.0.1:8889/resolve;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Forwarded-User $remote_user;
+    }
+
+    ##
+    # LiteLLM proxy — OpenAI-compatible API endpoints
+    # Requires Kerberos/SPNEGO auth; injects per-user virtual key via key-broker.
+    # Admin tasks (key management, spend reporting) are done via curl with the master key.
+    ##
+    location /litellm/ {
+        # Kerberos/SPNEGO authentication
+        auth_gss on;
+        auth_gss_keytab /etc/nginx/keytab/nginx.keytab;
+        auth_gss_realm $gss_realm;
+        auth_gss_format_full on;
+        auth_gss_allow_basic_fallback off;
+
+        # Resolve per-user LiteLLM key via key-broker
+        auth_request /_litellm_key_broker;
+        auth_request_set $litellm_key $upstream_http_x_litellm_key;
+
+        # Proxy to LiteLLM, replacing Authorization header with virtual key
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-User $remote_user;
+        proxy_set_header Authorization "Bearer $litellm_key";
+
+        # SSE / streaming support
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    ##
     # Protected area - requires Kerberos auth + Zulassung group membership
     ##
     location /protected/ {
+        # OPTIONS preflight exemption — return 204 without auth
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin  $http_origin;
+            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS";
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept";
+            add_header Access-Control-Max-Age       600;
+            add_header Content-Length               0;
+            return 204;
+        }
+
         # First: Kerberos authentication (already configured)
         auth_gss on;
         auth_gss_keytab /etc/nginx/keytab/nginx.keytab;

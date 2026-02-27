@@ -44,6 +44,62 @@
             border-radius: 3px;
             font-family: 'Courier New', monospace;
         }
+
+        /* ── AJAX test panel ── */
+        #ajax-tester {
+            margin-top: 40px;
+            border-top: 3px solid #e67e22;
+            padding-top: 20px;
+        }
+        #ajax-tester h2 {
+            color: #e67e22;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .warning-box code {
+            background-color: #ffeeba;
+        }
+        .btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        button.test-btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: bold;
+            transition: opacity 0.15s;
+        }
+        button.test-btn:hover { opacity: 0.85; }
+        button.test-btn.include  { background-color: #27ae60; color: white; }
+        button.test-btn.omit     { background-color: #c0392b; color: white; }
+        button.test-btn.same-req { background-color: #2980b9; color: white; }
+        #result-area {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            padding: 18px;
+            border-radius: 6px;
+            min-height: 180px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 15px;
+        }
+        .result-ok    { color: #6fcf97; }
+        .result-warn  { color: #f2c94c; }
+        .result-error { color: #eb5757; }
+        .result-info  { color: #56ccf2; }
     </style>
 </head>
 <body>
@@ -80,6 +136,180 @@
         <p style="margin-top: 30px; color: #666; font-size: 0.9em;">
             <a href="/">← Back to public area</a>
         </p>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             SPNEGO / AJAX DEBUG PANEL
+             ═══════════════════════════════════════════════════════════ -->
+        <section id="ajax-tester">
+            <h2>🧪 SPNEGO AJAX Debug Panel</h2>
+
+            <div class="warning-box">
+                <strong>⚠️ Key concept — <code>credentials: 'include'</code></strong><br><br>
+                Browsers do <em>not</em> send Kerberos / NTLM tokens on XHR or <code>fetch()</code>
+                requests unless you explicitly opt in:<br><br>
+                <code>fetch(url, { credentials: 'include' })</code><br><br>
+                Without this flag the browser sends <strong>no</strong>
+                <code>Authorization: Negotiate …</code> header, the server returns
+                <strong>401</strong>, and SPNEGO negotiation never starts.
+                Use the buttons below to compare both modes against the same endpoint.
+            </div>
+
+            <h3>Test targets (same-origin, under <code>/protected/</code>)</h3>
+            <p>
+                All requests go to <code>/protected/index.html</code> (this page) — a static
+                file that nginx already protects with SPNEGO.  No extra endpoints or nginx
+                config changes are needed.
+            </p>
+
+            <div class="btn-row">
+                <button class="test-btn include"
+                        onclick="runFetch('/protected/index.html', 'include')">
+                    ✅ fetch — credentials: 'include'
+                </button>
+                <button class="test-btn omit"
+                        onclick="runFetch('/protected/index.html', 'omit')">
+                    ❌ fetch — credentials: 'omit'
+                </button>
+                <button class="test-btn same-req"
+                        onclick="runFetch('/protected/index.html', 'same-origin')">
+                    🔵 fetch — credentials: 'same-origin' (default)
+                </button>
+                <button class="test-btn include"
+                        onclick="runXHR('/protected/index.html', true)">
+                    ✅ XHR — withCredentials: true
+                </button>
+                <button class="test-btn omit"
+                        onclick="runXHR('/protected/index.html', false)">
+                    ❌ XHR — withCredentials: false
+                </button>
+                <button class="test-btn same-req"
+                        onclick="clearOutput()">
+                    🗑 Clear
+                </button>
+            </div>
+
+            <div id="result-area">Results will appear here…</div>
+        </section>
     </div>
+
+    <script>
+    /* ── helpers ── */
+    const out = document.getElementById('result-area');
+
+    function ts() {
+        return new Date().toISOString().replace('T', ' ').slice(0, 23);
+    }
+
+    function log(msg, cls) {
+        const span = document.createElement('span');
+        if (cls) span.className = cls;
+        span.textContent = msg + '\n';
+        out.appendChild(span);
+        out.scrollTop = out.scrollHeight;
+    }
+
+    function clearOutput() {
+        out.innerHTML = '';
+    }
+
+    function separator(label) {
+        log('─'.repeat(60), 'result-info');
+        log('[' + ts() + '] ' + label, 'result-info');
+        log('─'.repeat(60), 'result-info');
+    }
+
+    function formatHeaders(headers) {
+        const lines = [];
+        headers.forEach(function(val, name) {
+            lines.push('  ' + name + ': ' + val);
+        });
+        return lines.length ? lines.join('\n') : '  (no headers exposed to JS)';
+    }
+
+    /* ── fetch() test ── */
+    function runFetch(url, credentialsMode) {
+        separator('fetch("' + url + '", { credentials: "' + credentialsMode + '" })');
+        log('Sending request…', 'result-info');
+
+        fetch(url, { credentials: credentialsMode })
+            .then(function(resp) {
+                var statusClass = (resp.status >= 200 && resp.status < 300)
+                    ? 'result-ok'
+                    : (resp.status === 401 ? 'result-error' : 'result-warn');
+
+                log('HTTP status : ' + resp.status + ' ' + resp.statusText, statusClass);
+                log('credentials: ' + credentialsMode,
+                    credentialsMode === 'include' ? 'result-ok' : 'result-error');
+
+                /* Expose which auth-related headers the server sent back */
+                var authHeaders = ['www-authenticate', 'authorization',
+                                   'x-auth-request-user', 'x-remote-user',
+                                   'set-cookie'];
+                log('Response headers (auth-related):', 'result-info');
+                var found = false;
+                authHeaders.forEach(function(h) {
+                    var v = resp.headers.get(h);
+                    if (v) {
+                        log('  ' + h + ': ' + v, 'result-warn');
+                        found = true;
+                    }
+                });
+                if (!found) log('  (none of the watched headers present)', 'result-warn');
+
+                log('All visible response headers:', 'result-info');
+                log(formatHeaders(resp.headers));
+
+                if (resp.status === 401) {
+                    log('→ 401 received — browser did NOT send Negotiate token.', 'result-error');
+                    log('  Try the "credentials: include" button instead.', 'result-error');
+                } else if (resp.status >= 200 && resp.status < 300) {
+                    log('→ Success — SPNEGO token was accepted.', 'result-ok');
+                }
+            })
+            .catch(function(err) {
+                log('Network / CORS error: ' + err, 'result-error');
+                log('(Same-origin requests should not hit CORS — check the console.)', 'result-warn');
+            });
+    }
+
+    /* ── XMLHttpRequest test ── */
+    function runXHR(url, withCreds) {
+        separator('XHR GET "' + url + '" — withCredentials: ' + withCreds);
+        log('Sending request…', 'result-info');
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.withCredentials = withCreds;
+
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== 4) return;
+
+            var statusClass = (xhr.status >= 200 && xhr.status < 300)
+                ? 'result-ok'
+                : (xhr.status === 401 ? 'result-error' : 'result-warn');
+
+            log('HTTP status      : ' + xhr.status + ' ' + xhr.statusText, statusClass);
+            log('withCredentials  : ' + withCreds,
+                withCreds ? 'result-ok' : 'result-error');
+
+            var allHeaders = xhr.getAllResponseHeaders();
+            log('All response headers:', 'result-info');
+            log(allHeaders ? allHeaders : '  (empty)');
+
+            if (xhr.status === 401) {
+                log('→ 401 received — browser did NOT send Negotiate token.', 'result-error');
+                log('  Try the "withCredentials: true" button instead.', 'result-error');
+            } else if (xhr.status >= 200 && xhr.status < 300) {
+                log('→ Success — SPNEGO token was accepted.', 'result-ok');
+            }
+        };
+
+        xhr.onerror = function() {
+            log('XHR network error — check browser console for details.', 'result-error');
+        };
+
+        xhr.send();
+    }
+    </script>
 </body>
 </html>
