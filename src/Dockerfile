@@ -6,11 +6,16 @@ ENV NGINX_VERSION=1.24.0
 RUN mkdir /opt/build
 ADD http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz /opt/build/
 RUN tar -C /opt/build -xf /opt/build/nginx-${NGINX_VERSION}.tar.gz
-ADD https://github.com/stnoonan/spnego-http-auth-nginx-module.git /opt/build/nginx-${NGINX_VERSION}/spnego-http-auth-nginx-module/
 
 WORKDIR /opt/build/nginx-${NGINX_VERSION}
-RUN apt update && apt install -y gcc make libpcre2-dev libssl-dev zlib1g-dev libxml2-dev \
+
+# Install build dependencies AND git (needed to clone the SPNEGO module)
+RUN apt update && apt install -y git gcc make libpcre2-dev libssl-dev zlib1g-dev libxml2-dev \
                       libxslt-dev libgd-dev libperl-dev libextutils-depends-perl libgeoip-dev libkrb5-dev
+
+# Clone the SPNEGO module (ADD cannot clone git repos)
+RUN git clone https://github.com/stnoonan/spnego-http-auth-nginx-module.git spnego-http-auth-nginx-module
+
 RUN ./configure \
     --with-cc-opt='-g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/nginx-5QYLpr/nginx-1.24.0=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fdebug-prefix-map=/build/nginx-5QYLpr/nginx-1.24.0=/usr/src/nginx-1.24.0-2ubuntu7.3 -fPIC -Wdate-time -D_FORTIFY_SOURCE=3' \
     --with-ld-opt='-Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Wl,-z,now -fPIC' \
