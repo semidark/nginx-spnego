@@ -3,3 +3,18 @@
 certs/*.crt
 certs/*.key
 certs/*.pem
+
+# Kerberos keytab files (sensitive!)
+keytab/*.keytab
+
+# Environment file with secrets
+.env
+
+# Editor and OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Plans directory (internal)
+plans/

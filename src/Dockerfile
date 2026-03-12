@@ -1,6 +1,7 @@
+ARG NGINX_VERSION=1.24.0
 FROM ubuntu:24.04 AS build
-
-ENV NGINX_VERSION=1.24.0
+ARG NGINX_VERSION  
+ENV NGINX_VERSION=${NGINX_VERSION}
 
 ##PREPARE SOURCE
 RUN mkdir /opt/build
@@ -66,37 +67,36 @@ RUN ./configure \
 RUN make
 
 FROM ubuntu:24.04
+ARG NGINX_VERSION
+LABEL maintainer="nico.thomaier@adesso.de"
+LABEL description="NGINX with SPNEGO/Kerberos authentication module"
+
 EXPOSE 80/tcp
 EXPOSE 443/tcp
 
-
-# Install nginx, Kerberos libraries, and openssl for certificate generation
+# Install nginx, Kerberos libraries, openssl for certificate generation,
+# gettext-base for envsubst templating, and curl for HEALTHCHECK
 RUN apt update && apt install -y --no-install-recommends \
     nginx \
     libgssapi-krb5-2 \
     krb5-user \
     openssl \
+    gettext-base \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy custom-built nginx with SPNEGO module
-COPY --from=build /opt/build/nginx-1.24.0/objs/nginx /usr/sbin/nginx
+COPY --from=build /opt/build/nginx-${NGINX_VERSION}/objs/nginx /usr/sbin/nginx
 
-# TODO: For production don't install Debugging tools
-RUN apt update && apt install -y --no-install-recommends \
-    dnsutils \
-    fish \
-    && rm -rf /var/lib/apt/lists/*
+# Add krb5.conf template (rendered at container startup via envsubst)
+ADD krb5.conf.template /etc/nginx/templates/krb5.conf.template
 
-# Add configuration and static files
-ADD default /etc/nginx/sites-enabled/default
-ADD index.html /var/www/html/index.html
+# Create necessary runtime directories
+RUN mkdir -p /etc/nginx/ssl /etc/nginx/keytab /etc/nginx/sites-enabled /var/www/html
 
-# Add Kerberos client configuration
-ADD krb5.conf /etc/krb5.conf
-
-# Add entrypoint script for TLS certificate generation and keytab wait
+# Add entrypoint script for runtime configuration and startup
 ADD entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
 
+ENTRYPOINT ["/entrypoint.sh"]

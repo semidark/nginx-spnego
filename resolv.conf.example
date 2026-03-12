@@ -1,0 +1,13 @@
+# Example DNS configuration for nginx-spnego auth-gateway
+#
+# Only needed when Docker's default DNS cannot resolve the Active Directory domain.
+# Mount this file as /etc/resolv.conf in the container if your AD DNS is not
+# reachable through the default Docker DNS.
+#
+# Usage in docker-compose.yaml:
+#   volumes:
+#     - ./resolv.conf:/etc/resolv.conf:ro
+#
+# Replace the nameserver with your AD domain controller's IP address.
+nameserver 10.0.2.1
+search corp.example.com

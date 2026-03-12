@@ -1,0 +1,41 @@
+# =============================================================================
+# nginx-spnego Production Docker Compose
+# =============================================================================
+# Prerequisites:
+#   1. Copy .env.example to .env and fill in your Kerberos configuration
+#   2. Place your nginx site config in config/sites-enabled/default
+#   3. Place your keytab file in keytab/nginx.keytab
+#   4. (Optional) Place real TLS certs in certs/nginx.crt and certs/nginx.key
+#
+# Usage:
+#   docker compose up -d
+# =============================================================================
+
+services:
+  auth-gateway:
+    build:
+      context: ./src
+    # For pre-built images, replace 'build' with:
+    # image: your-registry/nginx-spnego:1.0.0
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      # NGINX configuration (required)
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/sites-enabled:/etc/nginx/sites-enabled:ro
+      # Kerberos keytab (required)
+      - ./keytab:/etc/nginx/keytab:ro
+      # TLS certificates (optional - self-signed generated if not provided)
+      - ./certs:/etc/nginx/ssl:rw
+      # Custom DNS resolution (optional - only if Docker DNS can't resolve AD domain)
+      # - ./resolv.conf:/etc/resolv.conf:ro
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
