@@ -1,6 +1,6 @@
 # nginx-spnego
 
-NGINX with the **SPNEGO/Kerberos module** precompiled for GSSAPI-based Single Sign-On authentication, packaged as a Docker container acting as a **reverse proxy**. Designed for enterprise environments using **FreeIPA** or **Windows Server Active Directory**.
+NGINX with the **SPNEGO/Kerberos module** precompiled for GSSAPI-based Single Sign-On authentication, packaged as a container acting as a **reverse proxy**. Designed for enterprise environments using **FreeIPA** or **Windows Server Active Directory**.
 
 ---
 
@@ -18,7 +18,7 @@ cp nginx.keytab keytab/nginx.keytab
 $EDITOR config/sites-enabled/default
 
 # 4. Start the container
-docker compose up -d
+podman compose up -d
 ```
 
 ---
@@ -102,7 +102,7 @@ To **regenerate** the self-signed certificate:
 
 ```bash
 rm certs/nginx.crt certs/nginx.key
-docker compose restart nginx-spnego
+podman compose restart nginx-spnego
 ```
 
 ---
@@ -113,21 +113,19 @@ docker compose restart nginx-spnego
 nginx-spnego/
 ├── .env.example              # Environment variable template
 ├── .gitignore
-├── docker-compose.yaml       # Production Docker Compose
-├── k8s.example.yaml          # Kubernetes deployment example
+├── docker-compose.yaml       # Production Compose
 ├── resolv.conf.example       # Custom DNS example
 ├── README.md
 ├── certs/                    # TLS certificates (auto-generated or mounted)
 │   └── .gitkeep
 ├── config/                   # Runtime configuration (mounted into container)
-│   ├── krb5.conf.example     # Kerberos config reference
 │   ├── nginx.conf            # Main NGINX config
 │   └── sites-enabled/
 │       └── default           # Site config with reverse proxy + SPNEGO
 ├── keytab/                   # Kerberos keytab (mounted into container)
 │   └── .gitkeep
-└── src/                      # Docker build context
-    ├── Dockerfile
+└── src/                      # Container build context
+    ├── Containerfile
     ├── entrypoint.sh
     └── krb5.conf.template    # Template for runtime krb5.conf generation
 ```
@@ -137,10 +135,10 @@ nginx-spnego/
 ## 🔨 Building the Image
 
 ```bash
-docker build -t your-registry/nginx-spnego:1.0.0 ./src
+podman build -t your-registry/nginx-spnego:1.0.0 ./src
 ```
 
-Update the `image:` field in [`docker-compose.yaml`](docker-compose.yaml) or [`k8s.example.yaml`](k8s.example.yaml) accordingly.
+Update the `image:` field in [`docker-compose.yaml`](docker-compose.yaml) accordingly.
 
 ---
 
@@ -151,8 +149,6 @@ The `/health` endpoint is available on both **port 80** and **port 443** without
 ```
 GET /health → 200 OK
 ```
-
-Used by the Docker `HEALTHCHECK` instruction and compatible with load balancer health probes.
 
 ---
 
@@ -168,7 +164,7 @@ For Windows Active Directory environments, ensure the service account has AES en
 
 ```bash
 # Should show aes256-cts and aes128-cts entries
-docker compose exec nginx-spnego klist -ke /etc/nginx/keytab/nginx.keytab
+podman compose exec nginx-spnego klist -ke /etc/nginx/keytab/nginx.keytab
 ```
 
 This ensures compatibility with modern Windows clients and browsers that prefer or require AES encryption.
@@ -190,7 +186,7 @@ Place your certificate and key in `certs/` before starting:
 ```bash
 cp /path/to/your.crt certs/nginx.crt
 cp /path/to/your.key certs/nginx.key
-docker compose up -d
+podman compose up -d
 ```
 
 ### Importing Self-Signed Cert into Windows
@@ -249,19 +245,6 @@ Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Edge" -Name "AuthNegot
 
 ---
 
-## ☸️ Kubernetes Deployment
-
-See [`k8s.example.yaml`](k8s.example.yaml) for a complete example. The architecture uses:
-
-- A **Deployment** running this image with the keytab mounted from a `Secret`
-- A **ClusterIP Service** exposing the SPNEGO auth pod internally
-- An **Ingress** on the protected application using `auth-url` and `auth-response-headers` annotations to delegate authentication to the SPNEGO service
-- The authenticated username is forwarded to backends via the `X-Authenticated-User` header
-
-Update the image reference in `k8s.example.yaml` to your own registry before deploying.
-
----
-
 ## 🔍 Troubleshooting
 
 | Symptom | Likely Cause | Fix |
@@ -276,13 +259,13 @@ Update the image reference in `k8s.example.yaml` to your own registry before dep
 **Check container logs:**
 
 ```bash
-docker compose logs -f nginx-spnego
+podman compose logs -f nginx-spnego
 ```
 
 **Test NGINX config syntax:**
 
 ```bash
-docker compose exec nginx-spnego nginx -t
+podman compose exec nginx-spnego nginx -t
 ```
 
 ---
