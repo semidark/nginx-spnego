@@ -9,6 +9,7 @@ ADD http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz /opt/build/
 RUN tar -C /opt/build -xf /opt/build/nginx-${NGINX_VERSION}.tar.gz
 
 WORKDIR /opt/build/nginx-${NGINX_VERSION}
+ADD https://github.com/nginx/njs.git /opt/build/nginx-${NGINX_VERSION}/njs-module/
 
 # Install build dependencies AND git (needed to clone the SPNEGO module)
 RUN apt update && apt install -y git gcc make libpcre2-dev libssl-dev zlib1g-dev libxml2-dev \
@@ -60,9 +61,10 @@ RUN ./configure \
     --with-http_perl_module=dynamic \
     --with-http_xslt_module=dynamic \
     --with-mail=dynamic \
-    --with-stream=dynamic \
+    --with-stream \
     --with-stream_geoip_module=dynamic \
-    --add-module=spnego-http-auth-nginx-module
+    --add-module=spnego-http-auth-nginx-module \
+    --add-module=./njs-module/nginx
 
 RUN make
 
